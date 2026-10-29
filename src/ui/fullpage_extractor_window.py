@@ -267,7 +267,7 @@ class FullPageExtractorWindow(ctk.CTkToplevel):
         )
         self.btn_cancel.grid(row=0, column=6, padx=4, pady=6)
 
-        # Force OCR Checkbox
+        # Force OCR Checkbox & Engine Indicator
         self.force_ocr_var = ctk.BooleanVar(value=False)
         self.chk_force_ocr = ctk.CTkCheckBox(
             top_bar,
@@ -278,11 +278,21 @@ class FullPageExtractorWindow(ctk.CTkToplevel):
             checkbox_width=18,
             checkbox_height=18,
         )
-        self.chk_force_ocr.grid(row=0, column=7, padx=6, pady=6)
+        self.chk_force_ocr.grid(row=0, column=7, padx=(6, 2), pady=6)
+
+        engine_disp = self.hybrid_ocr.engine_wrapper.get_backend_display_name()
+        self.lbl_engine_badge = ctk.CTkLabel(
+            top_bar,
+            text=f"● {engine_disp}",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#00e5ff",
+            anchor="w",
+        )
+        self.lbl_engine_badge.grid(row=0, column=8, padx=(2, 6), pady=6)
 
         # Multi-Window Resizability & Snap Helpers
         win_frame = ctk.CTkFrame(top_bar, fg_color="transparent")
-        win_frame.grid(row=0, column=8, sticky="e", padx=(4, 8), pady=6)
+        win_frame.grid(row=0, column=9, sticky="e", padx=(4, 8), pady=6)
 
         self.pin_var = ctk.BooleanVar(value=False)
         self.chk_pin = ctk.CTkCheckBox(

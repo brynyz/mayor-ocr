@@ -35,6 +35,11 @@ from src.models.template_model import (
 
 OCR_EXTRACTION_DPI = 250
 
+# Process-level singletons to prevent multiple InitOCRUsingCallback calls to chrome_screen_ai.dll
+_GLOBAL_LOCRO_INSTANCE: Optional[Any] = None
+_GLOBAL_ONEOCR_INSTANCE: Optional[Any] = None
+_GLOBAL_RAPIDOCR_INSTANCE: Optional[Any] = None
+
 
 # ==============================================================================
 # 1. MODULAR OCR ENGINE WRAPPER (locro Chrome ScreenAI / oneocr / Fallback)
@@ -78,11 +83,12 @@ class OCREngineWrapper:
         """
         dll_name = "chrome_screen_ai.dll" if sys.platform == "win32" else "libchromescreenai.so"
         app_dir = Path(get_app_dir())
+        script_dir = Path(__file__).resolve().parent.parent.parent
 
         direct_candidates = [
             app_dir / "screen_ai",
             app_dir / "_internal" / "screen_ai",
-            Path(__file__).resolve().parent.parent.parent / "screen_ai",
+            script_dir / "screen_ai",
         ]
         for cand in direct_candidates:
             if (cand / dll_name).is_file():
@@ -94,8 +100,8 @@ class OCREngineWrapper:
 
         local_appdata = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
         browser_bases = [
-            local_appdata / "Google" / "Chrome" / "User Data" / "screen_ai",
             local_appdata / "BraveSoftware" / "Brave-Browser" / "User Data" / "screen_ai",
+            local_appdata / "Google" / "Chrome" / "User Data" / "screen_ai",
             local_appdata / "Microsoft" / "Edge" / "User Data" / "screen_ai",
             local_appdata / "Chromium" / "User Data" / "screen_ai",
             local_appdata / "locro",
@@ -121,10 +127,11 @@ class OCREngineWrapper:
         Checks portable `<app_dir>/oneocr` first, then `~/.config/oneocr`.
         """
         app_dir = Path(get_app_dir())
+        script_dir = Path(__file__).resolve().parent.parent.parent
         candidates = [
             app_dir / "oneocr",
             app_dir / "_internal" / "oneocr",
-            Path(__file__).resolve().parent.parent.parent / "oneocr",
+            script_dir / "oneocr",
             Path.home() / ".config" / "oneocr",
         ]
         for cand in candidates:
@@ -133,7 +140,11 @@ class OCREngineWrapper:
         return None
 
     def _init_locro(self) -> Any:
-        """Initialize Chrome `screen_ai` via `locro.ScreenAI`."""
+        """Initialize Chrome `screen_ai` via `locro.ScreenAI` using process-level singleton."""
+        global _GLOBAL_LOCRO_INSTANCE
+        if _GLOBAL_LOCRO_INSTANCE is not None:
+            return _GLOBAL_LOCRO_INSTANCE
+
         import locro
         import locro._dll as locro_dll
 
@@ -142,27 +153,41 @@ class OCREngineWrapper:
 
         model_dir = self.find_screen_ai_model_dir()
         if model_dir is not None:
-            return locro.ScreenAI(model_dir=model_dir)
-        return locro.ScreenAI()
+            ai = locro.ScreenAI(model_dir=model_dir)
+        else:
+            ai = locro.ScreenAI()
+
+        _GLOBAL_LOCRO_INSTANCE = ai
+        return _GLOBAL_LOCRO_INSTANCE
 
     def _init_oneocr(self) -> Any:
-        """Initialize Windows 11 `oneocr.OcrEngine`."""
+        """Initialize Windows 11 `oneocr.OcrEngine` using process-level singleton."""
+        global _GLOBAL_ONEOCR_INSTANCE
+        if _GLOBAL_ONEOCR_INSTANCE is not None:
+            return _GLOBAL_ONEOCR_INSTANCE
+
         import oneocr
 
         custom_dir = self.find_oneocr_dir()
         if custom_dir is not None:
             oneocr.CONFIG_DIR = str(custom_dir)
-        return oneocr.OcrEngine()
+        engine = oneocr.OcrEngine()
+        _GLOBAL_ONEOCR_INSTANCE = engine
+        return _GLOBAL_ONEOCR_INSTANCE
 
     def _init_rapidocr(self) -> Any:
         """Initialize RapidOCR as a resilient offline fallback if neither native DLL is found."""
+        global _GLOBAL_RAPIDOCR_INSTANCE
+        if _GLOBAL_RAPIDOCR_INSTANCE is not None:
+            return _GLOBAL_RAPIDOCR_INSTANCE
+
         try:
             from rapidocr_onnxruntime import RapidOCR
         except ImportError:
             from rapidocr import RapidOCR  # type: ignore
 
         try:
-            return RapidOCR(
+            engine = RapidOCR(
                 text_score=0.25,
                 det_db_thresh=0.20,
                 det_db_box_thresh=0.25,
@@ -171,7 +196,10 @@ class OCREngineWrapper:
                 min_height=10,
             )
         except TypeError:
-            return RapidOCR()
+            engine = RapidOCR()
+
+        _GLOBAL_RAPIDOCR_INSTANCE = engine
+        return _GLOBAL_RAPIDOCR_INSTANCE
 
     def initialize(self) -> str:
         """
@@ -217,20 +245,40 @@ class OCREngineWrapper:
 
     def set_preferred_engine(self, engine_name: str) -> str:
         """Switch the preferred OCR engine ('auto', 'locro', 'oneocr', 'rapidocr') and re-initialize."""
+        clean = engine_name.lower().strip()
         with self._lock:
-            self.preferred_engine = engine_name.lower().strip()
+            self.preferred_engine = clean
+
+            # Fast switch using existing instances without re-calling DLL initialization
+            if clean in (self.ENGINE_LOCRO, self.ENGINE_AUTO) and (_GLOBAL_LOCRO_INSTANCE is not None or self._locro_engine is not None):
+                self._locro_engine = _GLOBAL_LOCRO_INSTANCE or self._locro_engine
+                self.active_backend = self.ENGINE_LOCRO
+                return self.active_backend
+
+            if clean == self.ENGINE_ONEOCR and (_GLOBAL_ONEOCR_INSTANCE is not None or self._oneocr_engine is not None):
+                self._oneocr_engine = _GLOBAL_ONEOCR_INSTANCE or self._oneocr_engine
+                self.active_backend = self.ENGINE_ONEOCR
+                return self.active_backend
+
+            if clean == self.ENGINE_RAPIDOCR and (_GLOBAL_RAPIDOCR_INSTANCE is not None or self._rapidocr_engine is not None):
+                self._rapidocr_engine = _GLOBAL_RAPIDOCR_INSTANCE or self._rapidocr_engine
+                self.active_backend = self.ENGINE_RAPIDOCR
+                return self.active_backend
+
             self.active_backend = None
+
         return self.initialize()
 
     def get_backend_display_name(self) -> str:
         """Return a human-readable description of the active OCR backend."""
         backend = self.active_backend or self.initialize()
         if backend == self.ENGINE_LOCRO:
-            ver = getattr(self._locro_engine, "version", None)
+            engine = self._locro_engine or _GLOBAL_LOCRO_INSTANCE
+            ver = getattr(engine, "version", None)
             ver_str = f" v{ver[0]}.{ver[1]}" if ver else ""
-            return f"locro (Chrome screen_ai.dll{ver_str})"
+            return f"locro (Chrome Screen AI{ver_str})"
         if backend == self.ENGINE_ONEOCR:
-            return "oneocr (Windows 11 oneocr.dll)"
+            return "oneocr (Windows 11 OneOCR)"
         return "RapidOCR (Offline Fallback)"
 
     # --------------------------------------------------------------------------

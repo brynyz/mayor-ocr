@@ -83,7 +83,16 @@ class LeftSidebar(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
             command=self._handle_engine_select,
         )
-        self.opt_engine.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 5))
+        self.opt_engine.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 2))
+
+        self.lbl_active_engine = ctk.CTkLabel(
+            pdf_frame,
+            text="● Engine: Initializing...",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#00e5ff",
+            anchor="w",
+        )
+        self.lbl_active_engine.grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
         self.btn_open_pdf = ctk.CTkButton(
             pdf_frame,
@@ -92,7 +101,7 @@ class LeftSidebar(ctk.CTkFrame):
             height=30,
             font=ctk.CTkFont(weight="bold"),
         )
-        self.btn_open_pdf.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 4))
+        self.btn_open_pdf.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(0, 4))
 
         self.btn_prev_page = ctk.CTkButton(
             pdf_frame,
@@ -102,14 +111,14 @@ class LeftSidebar(ctk.CTkFrame):
             command=on_prev_page,
             state="disabled",
         )
-        self.btn_prev_page.grid(row=3, column=0, sticky="w")
+        self.btn_prev_page.grid(row=4, column=0, sticky="w")
 
         self.lbl_page_info = ctk.CTkLabel(
             pdf_frame,
             text="Page 0 / 0",
             font=ctk.CTkFont(size=11, weight="bold"),
         )
-        self.lbl_page_info.grid(row=3, column=1, sticky="ew")
+        self.lbl_page_info.grid(row=4, column=1, sticky="ew")
 
         self.btn_next_page = ctk.CTkButton(
             pdf_frame,
@@ -119,11 +128,11 @@ class LeftSidebar(ctk.CTkFrame):
             command=on_next_page,
             state="disabled",
         )
-        self.btn_next_page.grid(row=3, column=2, sticky="e")
+        self.btn_next_page.grid(row=4, column=2, sticky="e")
 
         # Zoom row + Single-Page Mode
         zoom_row = ctk.CTkFrame(pdf_frame, fg_color="transparent")
-        zoom_row.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(4, 2))
+        zoom_row.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(4, 2))
         zoom_row.grid_columnconfigure((0, 1, 2), weight=1)
 
         ctk.CTkButton(
@@ -153,7 +162,7 @@ class LeftSidebar(ctk.CTkFrame):
             checkbox_width=16,
             checkbox_height=16,
         )
-        self.chk_single_page.grid(row=5, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        self.chk_single_page.grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         # --- 2. Anchor-Relative Rule Editor ---
         rule_editor = ctk.CTkFrame(self, fg_color=("gray85", "gray17"), corner_radius=6)
@@ -413,6 +422,11 @@ class LeftSidebar(ctk.CTkFrame):
                 command=lambda r_name=rule.name: self._on_delete_rule(r_name),
             )
             btn_del.grid(row=0, column=1, padx=(2, 6), pady=4)
+
+    def update_engine_badge(self, engine_display_name: str) -> None:
+        """Update the active engine status label in the sidebar."""
+        color = "#00e5ff" if "locro" in engine_display_name.lower() or "oneocr" in engine_display_name.lower() else "#ff9100"
+        self.lbl_active_engine.configure(text=f"● Active: {engine_display_name}", text_color=color)
 
     def set_processing_state(self, processing: bool) -> None:
         state = "disabled" if processing else "normal"

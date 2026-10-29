@@ -91,15 +91,18 @@ class FAASOCRApp(ctk.CTk):
         self.page_text_cache = self.right_panel.page_text_cache
 
         # Warm up OCR engine lazily on a background daemon thread
+        def _on_ocr_ready() -> None:
+            disp = self.hybrid_ocr.engine_wrapper.get_backend_display_name()
+            self.left_sidebar.update_engine_badge(disp)
+            self.set_status(f"Ready — Active Engine: {disp}")
+
         self.hybrid_ocr.warmup_async(
-            on_ready=lambda: self.after(
-                0,
-                lambda: self.set_status(
-                    f"Ready — Active Engine: {self.hybrid_ocr.engine_wrapper.get_backend_display_name()}"
-                ),
-            ),
+            on_ready=lambda: self.after(0, _on_ocr_ready),
             on_error=lambda exc: self.after(
-                0, lambda e=exc: self.set_status(f"OCR Init Warning: {e}")
+                0, lambda e=exc: (
+                    self.set_status(f"OCR Init Warning: {e}"),
+                    self.left_sidebar.update_engine_badge("Error loading engine"),
+                )
             ),
         )
 
@@ -174,6 +177,7 @@ class FAASOCRApp(ctk.CTk):
         try:
             self.hybrid_ocr.engine_wrapper.set_preferred_engine(engine_name)
             disp = self.hybrid_ocr.engine_wrapper.get_backend_display_name()
+            self.left_sidebar.update_engine_badge(disp)
             self.set_status(f"Switched OCR Engine -> {disp}")
         except Exception as exc:
             self.set_status(f"Engine switch error: {exc}")
