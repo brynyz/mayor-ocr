@@ -1,0 +1,12 @@
+customtkinter>=5.2.0
+PyMuPDF>=1.24.11
+opencv-python-headless>=4.8.0
+numpy>=1.26.0
+Pillow>=10.0.0
+locro @ git+https://github.com/sergiocorreia/clv-locro.git
+oneocr>=1.0.12
+rapidocr>=1.4.0
+onnxruntime>=1.19.0
+pandas>=2.2.0
+openpyxl>=3.1.0
+pyinstaller>=6.10.0

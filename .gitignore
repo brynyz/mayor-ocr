@@ -1,0 +1,39 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Build and distribution
+build/
+dist/
+*.spec
+*.old.exe
+
+# Large binary OCR model files (downloaded/extracted locally)
+screen_ai/
+oneocr/
+*.tflite
+*.dll
+*.so
+*.dylib
+
+# Application output and user data
+exports/*.xlsx
+exports/*.csv
+exports/*.txt
+!exports/.gitkeep
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
